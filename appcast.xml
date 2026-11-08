@@ -7,6 +7,15 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Обновления Yandex Loader для macOS</description>
     <language>ru</language>
     <item>
+      <title>Yandex Loader 1.5.0</title>
+      <pubDate>Sun, 08 Nov 2026 15:31:52 +0000</pubDate>
+      <sparkle:version>7</sparkle:version>
+      <sparkle:shortVersionString>1.5.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description>&lt;p&gt;Кнопка «Снимок» в окне 3D-превью сохраняет текущий ракурс, масштаб и освещение в WebP без потери качества.&lt;/p&gt;&lt;p&gt;Изображение сохраняется рядом с исходной моделью: hero.stl → hero.webp. Для модели на Яндекс Диске снимок загружается в её исходную облачную папку.&lt;/p&gt;&lt;p&gt;Если изображение уже существует, можно заменить его, сохранить копию с номером или отменить сохранение. Переключение на другую модель во время сохранения не меняет имя и папку уже сделанного снимка.&lt;/p&gt;</description>
+      <enclosure url="https://github.com/esharlay/yandex_loader/releases/download/v1.5.0/Yandex-Loader-1.5.0.zip" length="1786354" type="application/octet-stream" sparkle:edSignature="6EIHLwc+qdnoNTwVl4ZXlgvhPHZQR1QjKRB+UhhQJpcA9tLt7mKap05PSPQGLjIzgM+qprTW0E+4gJ8AgA68AA=="></enclosure>
+    </item>
+    <item>
       <title>Yandex Loader 1.4.0</title>
       <pubDate>Sun, 08 Nov 2026 13:31:52 +0000</pubDate>
       <sparkle:version>6</sparkle:version>
@@ -17,6 +26,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: deyPGHu9QMWYM1bJlH5XHewn2xnghrssjvKGZZnFWDcnZ8bFclBvC956C5X3njjOTpHmHFhqvGhskuTcQ+e3Cg==
-length: 1943
+edSignature: SDUnjGpDQ3Ve39AC4OyLdIznUdH9682cNSUCd4DGYBAj3EPJ77jzS3nTVSlhVGjnjbOeSaLmXcuKQAlRY3wTCw==
+length: 3433
 -->
