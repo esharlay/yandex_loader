@@ -1,0 +1,10 @@
+.build/
+.DS_Store
+work/
+release/
+*.app/
+*.zip
+*.dmg
+*.pem
+*.p12
+*.key

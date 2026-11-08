@@ -1,0 +1,65 @@
+name: Build release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Release.json
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      YANDEX_LOADER_BUILD_DIR: ${{ runner.temp }}/yandex-loader-build
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read release version
+        id: version
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          config = json.load(open('Release.json'))
+          version = config['version']
+          assert re.fullmatch(r'\d+\.\d+\.\d+', version)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'version={version}\ntag=v{version}\n')
+          PY
+      - name: Preserve existing release assets
+        id: existing
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check application
+        if: steps.existing.outputs.exists != 'true'
+        run: ./test.sh
+      - name: Build application
+        if: steps.existing.outputs.exists != 'true'
+        run: ./build.sh "$RUNNER_TEMP/release"
+      - name: Publish immutable release archive
+        if: steps.existing.outputs.exists != 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          archive="$RUNNER_TEMP/release/Yandex-Loader-$RELEASE_VERSION.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/release/Yandex Loader.app" "$archive"
+          unzip -t "$archive"
+          gh release create "$RELEASE_TAG" "$archive" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Yandex Loader $RELEASE_VERSION" --notes-file RELEASE_NOTES.md
+          echo 'Archive published. The update feed is signed and published separately from the owner’s Mac.' >> "$GITHUB_STEP_SUMMARY"

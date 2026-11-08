@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss version="2.0"><channel><title>Yandex Loader</title><link>https://github.com/esharlay/yandex_loader</link><description>Обновления Yandex Loader</description></channel></rss><!-- sparkle-signatures:
+edSignature: x3ezyL21TMnANsO6xrQyFqg2cKyoK0Vja+yxhWxVFUbmSUgJj8hqAil5HBxpFViAMeIlgQUf/k/Oa1fHMhdHDQ==
+length: 478
+-->

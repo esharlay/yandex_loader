@@ -1,0 +1,8 @@
+{
+  "version": "1.4.0",
+  "build": "6",
+  "repository": "esharlay/yandex_loader",
+  "feedURL": "https://raw.githubusercontent.com/esharlay/yandex_loader/main/appcast.xml",
+  "publicKey": "U7WktvnqsqfDpkkvAmDdwk2J1i9BDG/8p+R/5jE2eZI=",
+  "keychainAccount": "com.blueeggs.yandexloader.updates"
+}
