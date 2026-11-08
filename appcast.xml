@@ -7,6 +7,15 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Обновления Yandex Loader для macOS</description>
     <language>ru</language>
     <item>
+      <title>Yandex Loader 1.6.0</title>
+      <pubDate>Sun, 08 Nov 2026 17:05:34 +0000</pubDate>
+      <sparkle:version>8</sparkle:version>
+      <sparkle:shortVersionString>1.6.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description>&lt;p&gt;Нажмите на имя файла в верхней части 3D-превью, чтобы переименовать модель. Enter сохраняет новое имя, Esc отменяет ввод. Расширение файла сохраняется, счётчик файлов показывается отдельно от имени.&lt;/p&gt;&lt;p&gt;Переименование обновляет исходный файл и списки панелей без повторной загрузки геометрии: ракурс, масштаб, камера и освещение остаются прежними. Поддерживаются локальные модели и Яндекс Диск.&lt;/p&gt;&lt;p&gt;Следующий снимок получает новое имя: hero.stl → New Hero.stl → New Hero.webp. Можно ввести новое имя и сразу нажать «Снимок»: приложение сначала завершит переименование, затем сохранит изображение.&lt;/p&gt;</description>
+      <enclosure url="https://github.com/esharlay/yandex_loader/releases/download/v1.6.0/Yandex-Loader-1.6.0.zip" length="1801692" type="application/octet-stream" sparkle:edSignature="zU6ZxsrjLcnDJBmxrucb9CY9Uc8chC41AoT//AtZbcvmRDs/u6WPr/pLqHII9OtqiEHN+HcbPu44hd/R12azAQ=="></enclosure>
+    </item>
+    <item>
       <title>Yandex Loader 1.5.0</title>
       <pubDate>Sun, 08 Nov 2026 15:31:52 +0000</pubDate>
       <sparkle:version>7</sparkle:version>
@@ -26,6 +35,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: SDUnjGpDQ3Ve39AC4OyLdIznUdH9682cNSUCd4DGYBAj3EPJ77jzS3nTVSlhVGjnjbOeSaLmXcuKQAlRY3wTCw==
-length: 3433
+edSignature: 4JNM+mMPw44VvmQcNPzYCSYY6phJSOHvBUTkoyEfVJcmmLZ6oIfhmVYc3ehfkDxhSJb1Gb9aGu/9v7O645gWAA==
+length: 5157
 -->
