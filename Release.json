@@ -1,6 +1,6 @@
 {
-  "version": "1.5.0",
-  "build": "7",
+  "version": "1.6.0",
+  "build": "8",
   "repository": "esharlay/yandex_loader",
   "feedURL": "https://raw.githubusercontent.com/esharlay/yandex_loader/main/appcast.xml",
   "publicKey": "U7WktvnqsqfDpkkvAmDdwk2J1i9BDG/8p+R/5jE2eZI=",

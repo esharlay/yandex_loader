@@ -379,6 +379,59 @@ final class LoaderTests {
         let id = unknown.append(file("unknown", 0), displayName: "unknown"); unknown.prepared(); unknown.setPhase(id, .transferring)
         unknown.updateBytes(id, sent: 123, total: 0); XCTAssertTrue(unknown.isIndeterminate); XCTAssertEqual(unknown.record(id)?.bytes, 123)
     }
+    func testModelRenameNamesAndSelection() throws {
+        let file = FileEntry(location: .disk("disk:/Модели/hero.STL"), name: "hero.STL", isDirectory: false, size: 42, modified: Date(timeIntervalSince1970: 100))
+        let renamed = try ModelRename.entry(for: file, proposedName: "  Новый герой.v2  ")
+        XCTAssertEqual(renamed.name, "Новый герой.v2.STL")
+        XCTAssertEqual(renamed.location, .disk("disk:/Модели/Новый герой.v2.STL"))
+        XCTAssertEqual(renamed.size, file.size); XCTAssertEqual(renamed.modified, file.modified)
+        XCTAssertEqual(try ModelRename.entry(for: file, proposedName: "other.stl").name, "other.stl")
+        for name in ["", " ", ".", "..", ".STL", "../other", "bad/name", "bad:name"] {
+            XCTAssertThrowsError(try ModelRename.entry(for: file, proposedName: name))
+        }
+        let next = FileEntry(location: .disk("disk:/Модели/next.stl"), name: "next.stl", isDirectory: false, size: 1, modified: nil)
+        var selection = PreviewSelection(); selection.start(selected: [file], visible: [next, file])
+        selection.renamed(file.location, to: renamed)
+        XCTAssertEqual(selection.index, 1); XCTAssertEqual(selection.current, renamed)
+        XCTAssertEqual(selection.step(-1), next); XCTAssertEqual(selection.step(1), renamed)
+    }
+    func testLocalModelRenameProtectsFiles() async throws {
+        let files = FileService(disk: mockClient())
+        let original = root.appendingPathComponent("hero.stl")
+        let data = Data("model data must remain unchanged".utf8)
+        try data.write(to: original)
+        let result = try await files.renameModel(entry(original.path), proposedName: "Новый герой")
+        XCTAssertEqual(result.name, "Новый герой.stl")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: original.path))
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: result.location.path)), data)
+        let occupied = root.appendingPathComponent("occupied.stl"), other = Data("other model".utf8)
+        try other.write(to: occupied)
+        do { _ = try await files.renameModel(result, proposedName: "occupied"); XCTFail("Must not replace another model") } catch { }
+        XCTAssertEqual(try Data(contentsOf: occupied), other)
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: result.location.path)), data)
+        let capitalized = try await files.renameModel(result, proposedName: "НОВЫЙ ГЕРОЙ.stl")
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: capitalized.location.path)), data)
+    }
+    func testCloudModelRenameDoesNotDownload() async throws {
+        let client = mockClient(), original = FileEntry(location: .disk("disk:/Models/hero.stl"), name: "hero.stl", isDirectory: false, size: 300_000_000, modified: nil)
+        var moves = 0
+        MockDiskProtocol.handler = { request in
+            let path = request.url!.path
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            if path.hasSuffix("/resources/move") {
+                moves += 1
+                XCTAssertEqual(query.first { $0.name == "from" }?.value, original.location.path)
+                XCTAssertEqual(query.first { $0.name == "path" }?.value, "disk:/Models/New Hero.stl")
+                XCTAssertEqual(query.first { $0.name == "overwrite" }?.value, "false")
+                return (201, Data())
+            }
+            XCTAssertTrue(path.hasSuffix("/resources")); XCTAssertEqual(request.httpMethod, "GET")
+            return (404, Data())
+        }
+        let renamed = try await FileService(disk: client).renameModel(original, proposedName: "New Hero")
+        XCTAssertEqual(moves, 1); XCTAssertEqual(renamed.size, original.size)
+        XCTAssertEqual(ModelSnapshot.destination(for: renamed), .disk("disk:/Models/New Hero.webp"))
+    }
     func testSnapshotWebPEncoding() throws {
         let pixels: [UInt8] = [255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255]
         let image = CGImage(width: 2, height: 2, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 8,
@@ -522,7 +575,10 @@ final class LoaderTests {
             ("update waits for transfer and resumes exactly once", { tests.testUpdateWaitsForTransfers() }),
             ("real lossless WebP keeps size, colours and orientation", { try tests.testSnapshotWebPEncoding() }),
             ("snapshot beside model, conflicts and source protection", { try await tests.testSnapshotLocalSaveAndConflicts() }),
-            ("cloud snapshot uses original folder and explicit overwrite", { try await tests.testSnapshotCloudDestinationAndOverwrite() })
+            ("cloud snapshot uses original folder and explicit overwrite", { try await tests.testSnapshotCloudDestinationAndOverwrite() }),
+            ("model rename keeps extension and preview position", { try tests.testModelRenameNamesAndSelection() }),
+            ("local model rename preserves data and rejects collisions", { try await tests.testLocalModelRenameProtectsFiles() }),
+            ("cloud rename moves on server without downloading model", { try await tests.testCloudModelRenameDoesNotDownload() })
         ]
         if let address = ProcessInfo.processInfo.environment["YANDEX_LOADER_TEST_SERVER"], let url = URL(string: address) { checks.append(("real upload/download byte progress and cancellation", { try await tests.testHTTPTransportProgress(url) })) }
         for (name, check) in checks {

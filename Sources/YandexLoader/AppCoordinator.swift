@@ -16,7 +16,7 @@ import Quartz
     let transferStatus = TransferStatusControl()
     let transferQueue = TransferQueue()
     lazy var transferWindow = TransferWindowController(queue: transferQueue)
-    lazy var updates = UpdateController(isBusy: { [weak self] in self?.transfer != nil || self?.preview?.isSavingSnapshot == true })
+    lazy var updates = UpdateController(isBusy: { [weak self] in self?.transfer != nil || self?.preview?.isBusy == true })
     var accountInfo: DiskInfo?
     var buffer: [FileEntry] = []
     var bufferMove = false
@@ -44,6 +44,13 @@ import Quartz
         }
         preview.onSnapshotError = { [weak self] in self?.showError($0) }
         preview.onSnapshotActivityChange = { [weak self] in self?.updates.installationGate.resumeIfIdle() }
+        preview.canRename = { [weak self] in self?.transfer == nil }
+        preview.onModelRenamed = { [weak self] original, file in
+            guard let self else { return }
+            for pane in [left, right] where pane !== preview.sourcePane { pane.applyRename(original, to: file) }
+            buffer = buffer.map { $0.location == original ? file : $0 }; updateCut()
+            brief("Переименовано: " + file.name)
+        }
         for pane in [left, right] {
             pane.onActivate = { [weak self] p in self?.activate(p) }
             pane.onChange = { [weak self] in self?.updateState() }
@@ -77,6 +84,10 @@ import Quartz
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if preview?.isRenaming == true {
+            let alert = NSAlert(); alert.messageText = "Файл ещё переименовывается"; alert.informativeText = "Дождитесь завершения переименования перед выходом."; alert.addButton(withTitle: "Продолжить работу"); alert.runModal()
+            return .terminateCancel
+        }
         if preview?.isSavingSnapshot == true {
             let alert = NSAlert(); alert.messageText = "Снимок ещё сохраняется"; alert.informativeText = "Дождаться сохранения изображения перед выходом?"; alert.addButton(withTitle: "Продолжить сохранение"); alert.addButton(withTitle: "Завершить")
             if alert.runModal() != .alertSecondButtonReturn { return .terminateCancel }
@@ -128,6 +139,7 @@ import Quartz
     func activate(_ pane: PaneView) { let changed = activePane !== pane; activePane = pane; left.active = pane === left; right.active = pane === right; updateState(); if changed { preview?.followSelection(in: pane) } }
     func updateState() {
         guard activePane != nil else { return }
+        preview?.updateRenameAvailability()
         dual.update(enabled: transfer == nil && transferSource != nil, source: transferSource)
         sidebar.current = activePane.location
         let count = activePane.selected.count
@@ -191,7 +203,7 @@ import Quartz
         textSheet(title: "Перейти в папку", value: activePane.location.path, button: "Перейти") { [weak self] value in self?.activePane.navigate(Location.parse(value)) }
     }
     @objc func rename(_ sender: Any?) {
-        guard let file = activePane.selected.first, activePane.selected.count == 1 else { return }
+        guard preview?.isRenaming != true, let file = activePane.selected.first, activePane.selected.count == 1 else { return }
         let pane = activePane!
         textSheet(title: "Переименовать", value: file.name, button: "Переименовать", selectExtension: file.isDirectory) { [weak self] name in
             guard let self, name != file.name else { return }
@@ -203,7 +215,7 @@ import Quartz
         Task { do { var name = "новая папка"; var n = 2; while try await files.exists(pane.location.child(name)) { name = "новая папка (\(n))"; n += 1 }; try await files.mkdir(pane.location.child(name)); pane.reload(); brief("Создана папка «\(name)»") } catch { showError(error) } }
     }
     @objc func deleteItems(_ sender: Any?) {
-        let entries = activePane.selected; guard !entries.isEmpty, transfer == nil else { return }
+        let entries = activePane.selected; guard !entries.isEmpty, transfer == nil, preview?.isRenaming != true else { return }
         let alert = NSAlert(); alert.messageText = "Отправить в Корзину?"; alert.informativeText = entries.count == 1 ? entries[0].name : "Выбрано объектов: \(entries.count)"; alert.addButton(withTitle: "В Корзину"); alert.addButton(withTitle: "Отмена")
         alert.beginSheetModal(for: window) { [weak self] response in
             guard response == .alertFirstButtonReturn, let self else { return }
@@ -222,7 +234,7 @@ import Quartz
         (field.currentEditor() as? NSTextView)?.setSelectedRange(NSRange(location: 0, length: length))
     }
     func startTransfer(_ entries: [FileEntry], to folder: Location, move: Bool) {
-        guard transfer == nil, !entries.isEmpty else { return }
+        guard transfer == nil, preview?.isRenaming != true, !entries.isEmpty else { return }
         operationName = move ? "Перенос" : "Копирование"; progress.doubleValue = 0; progress.isHidden = false; cancel.isHidden = false; statusTimer?.invalidate()
         let engine = TransferEngine(files: files, queue: transferQueue)
         engine.onCompleted = { [weak self] location in

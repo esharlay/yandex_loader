@@ -30,6 +30,21 @@ class FileService {
         if source.isDisk { try await disk.copy(source, to: target, move: true) }
         else { try FileManager.default.moveItem(atPath: source.path, toPath: target.path) }
     }
+    func renameModel(_ file: FileEntry, proposedName: String) async throws -> FileEntry {
+        let renamed = try ModelRename.entry(for: file, proposedName: proposedName)
+        guard renamed.location != file.location else { return file }
+        if try await exists(renamed.location) {
+            var sameFile = false
+            if !file.location.isDisk && file.name.caseInsensitiveCompare(renamed.name) == .orderedSame {
+                let old = try URL(fileURLWithPath: file.location.path).resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier as? NSObject
+                let new = try URL(fileURLWithPath: renamed.location.path).resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier as? NSObject
+                sameFile = old != nil && old == new
+            }
+            guard sameFile else { throw LoaderError.message("Имя «\(renamed.name)» уже занято.") }
+        }
+        try await rename(file.location, to: renamed.location)
+        return renamed
+    }
     func writeSnapshot(_ data: Data, to target: Location, overwrite: Bool = false) async throws {
         try Task.checkCancellation()
         if target.isDisk {

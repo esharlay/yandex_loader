@@ -23,4 +23,7 @@ struct PreviewSelection {
         index += delta
         return current
     }
+    mutating func renamed(_ original: Location, to file: FileEntry) {
+        files = files.map { $0.location == original ? file : $0 }
+    }
 }

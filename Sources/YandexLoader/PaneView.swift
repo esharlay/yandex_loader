@@ -143,6 +143,17 @@ final class PaneView: NSView, NSTableViewDataSource, NSTableViewDelegate, NSSear
         let indexes = rows.indices.filter { if case .file(let f) = rows[$0] { return locations.contains(f.location) }; return false }
         table.selectRowIndexes(IndexSet(indexes), byExtendingSelection: false)
     }
+    func applyRename(_ original: Location, to file: FileEntry) {
+        guard location == file.location.parent else { return }
+        loading?.cancel(); stopWatcher()
+        let chosen = Set(selected.map { $0.location == original ? file.location : $0.location })
+        let selectRenamed = chosen.isEmpty || chosen.contains(file.location)
+        entries.removeAll { $0.location == original || $0.location == file.location }
+        entries.append(file)
+        rebuild()
+        select(locations: selectRenamed ? [file.location] : chosen)
+        startWatcher()
+    }
     private func rebuild() {
         let selection = Set(selected.map(\.location))
         rows = Listing.rows(entries, mode: mode, ascending: ascending, filter: search.stringValue, hidden: showHidden)
