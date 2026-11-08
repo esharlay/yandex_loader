@@ -10,6 +10,7 @@ struct ModelPreviewScene {
 
     static func make(model: SCNNode, fileExtension: String, zUp: Bool, aspectRatio: CGFloat) -> ModelPreviewScene {
         let scene = SCNScene()
+        scene.background.contents = NSColor(white: 0.13, alpha: 1)
         let orientation = SCNNode()
         orientation.addChildNode(model)
         let native = orientation.boundingBox

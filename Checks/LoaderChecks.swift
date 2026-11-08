@@ -2,6 +2,7 @@ import Foundation
 import SceneKit
 import AppKit
 import simd
+import ImageIO
 
 // Standalone checks keep validation available with Command Line Tools only (no XCTest/Xcode).
 var checkFailures = 0
@@ -378,6 +379,72 @@ final class LoaderTests {
         let id = unknown.append(file("unknown", 0), displayName: "unknown"); unknown.prepared(); unknown.setPhase(id, .transferring)
         unknown.updateBytes(id, sent: 123, total: 0); XCTAssertTrue(unknown.isIndeterminate); XCTAssertEqual(unknown.record(id)?.bytes, 123)
     }
+    func testSnapshotWebPEncoding() throws {
+        let pixels: [UInt8] = [255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255]
+        let image = CGImage(width: 2, height: 2, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 8,
+                            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
+                            provider: CGDataProvider(data: Data(pixels) as CFData)!, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
+        let data = try ModelSnapshot.encode(image)
+        XCTAssertEqual(String(data: data.prefix(4), encoding: .ascii), "RIFF")
+        XCTAssertEqual(String(data: data.subdata(in: 8..<12), encoding: .ascii), "WEBP")
+        let source = CGImageSourceCreateWithData(data as CFData, nil)!
+        let decoded = CGImageSourceCreateImageAtIndex(source, 0, nil)!
+        XCTAssertEqual(decoded.width, 2); XCTAssertEqual(decoded.height, 2)
+        var restored = [UInt8](repeating: 0, count: 16)
+        restored.withUnsafeMutableBytes { buffer in
+            let context = CGContext(data: buffer.baseAddress, width: 2, height: 2, bitsPerComponent: 8, bytesPerRow: 8,
+                                    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)!
+            context.draw(decoded, in: CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+        XCTAssertEqual(restored, pixels) // lossless, with the same colours and orientation
+    }
+    func testSnapshotLocalSaveAndConflicts() async throws {
+        let files = FileService(disk: mockClient())
+        let model = root.appendingPathComponent("Герой.final.STL")
+        let original = Data("original model".utf8), first = Data("first snapshot".utf8), second = Data("second snapshot".utf8)
+        try original.write(to: model)
+        let target = ModelSnapshot.destination(for: entry(model.path))
+        XCTAssertEqual(target, .local(root.appendingPathComponent("Герой.final.webp").path))
+        try await files.writeSnapshot(first, to: target)
+        do { try await files.writeSnapshot(second, to: target); XCTFail("Existing snapshot must not be overwritten without confirmation") } catch { }
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: target.path)), first)
+        let copy = try await ModelSnapshot.availableCopy(of: target, files: files)
+        XCTAssertEqual(copy.name, "Герой.final (2).webp")
+        try await files.writeSnapshot(second, to: copy)
+        try await files.writeSnapshot(second, to: target, overwrite: true)
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: target.path)), second)
+        XCTAssertEqual(try Data(contentsOf: model), original)
+        let folder = root.appendingPathComponent("folder.webp"); try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        let child = folder.appendingPathComponent("keep.txt"); try original.write(to: child)
+        do { try await files.writeSnapshot(second, to: .local(folder.path), overwrite: true); XCTFail("Must preserve existing folder") } catch { }
+        XCTAssertEqual(try Data(contentsOf: child), original)
+        let names = try FileManager.default.contentsOfDirectory(atPath: root.path)
+        XCTAssertFalse(names.contains { $0.hasPrefix(".yandexloader-snapshot-") })
+    }
+    func testSnapshotCloudDestinationAndOverwrite() async throws {
+        let client = mockClient()
+        let service = FileService(disk: client)
+        let model = FileEntry(location: .disk("disk:/Модели/hero.stl"), name: "hero.stl", isDirectory: false, size: 10, modified: nil)
+        let target = ModelSnapshot.destination(for: model)
+        XCTAssertEqual(target, .disk("disk:/Модели/hero.webp"))
+        var requests: [(String, String)] = [], uploads = 0
+        MockDiskProtocol.handler = { request in
+            if request.url!.path.hasSuffix("/resources/upload") {
+                let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+                requests.append((query.first { $0.name == "path" }!.value!, query.first { $0.name == "overwrite" }!.value!))
+                return (200, Data("{\"href\":\"https://upload.example/snapshot\"}".utf8))
+            }
+            if request.httpMethod == "PUT" { uploads += 1; return (201, Data()) }
+            return (200, Data("{\"name\":\"hero.webp\",\"path\":\"disk:/Модели/hero.webp\",\"type\":\"file\",\"size\":20}".utf8))
+        }
+        try await service.writeSnapshot(Data("image".utf8), to: target)
+        try await service.writeSnapshot(Data("replacement".utf8), to: target, overwrite: true)
+        XCTAssertEqual(requests.map { $0.0 }, [target.path, target.path])
+        XCTAssertEqual(requests.map { $0.1 }, ["false", "true"])
+        XCTAssertEqual(uploads, 2)
+        MockDiskProtocol.handler = { _ in (200, Data("{\"name\":\"hero.webp\",\"path\":\"disk:/Модели/hero.webp\",\"type\":\"dir\"}".utf8)) }
+        do { try await service.writeSnapshot(Data("image".utf8), to: target, overwrite: true); XCTFail("Must not overwrite a cloud folder") } catch { }
+    }
     @MainActor func testUpdateWaitsForTransfers() {
         var busy = true, installed = 0
         let gate = UpdateInstallationGate(isBusy: { busy })
@@ -452,7 +519,10 @@ final class LoaderTests {
             ("cancel child and preserve folder source", { try await tests.testCancelledChildKeepsFolderOriginal() }),
             ("byte weighted progress and unknown sizes", { tests.testByteWeightedProgressAndUnknownSize() }),
             ("network progress remains monotonic", { tests.testNetworkProgressMonotonicity() }),
-            ("update waits for transfer and resumes exactly once", { tests.testUpdateWaitsForTransfers() })
+            ("update waits for transfer and resumes exactly once", { tests.testUpdateWaitsForTransfers() }),
+            ("real lossless WebP keeps size, colours and orientation", { try tests.testSnapshotWebPEncoding() }),
+            ("snapshot beside model, conflicts and source protection", { try await tests.testSnapshotLocalSaveAndConflicts() }),
+            ("cloud snapshot uses original folder and explicit overwrite", { try await tests.testSnapshotCloudDestinationAndOverwrite() })
         ]
         if let address = ProcessInfo.processInfo.environment["YANDEX_LOADER_TEST_SERVER"], let url = URL(string: address) { checks.append(("real upload/download byte progress and cancellation", { try await tests.testHTTPTransportProgress(url) })) }
         for (name, check) in checks {

@@ -109,8 +109,8 @@ final class DiskClient {
         try Task.checkCancellation(); _ = try check(response)
         do { try FileManager.default.moveItem(at: temp, to: destination) } catch { try? FileManager.default.removeItem(at: temp); throw error }
     }
-    func upload(_ source: URL, to destination: Location, progress: ByteProgress? = nil) async throws {
-        let (data, _) = try await request("/resources/upload", params: ["path": destination.path, "overwrite": "false"])
+    func upload(_ source: URL, to destination: Location, overwrite: Bool = false, progress: ByteProgress? = nil) async throws {
+        let (data, _) = try await request("/resources/upload", params: ["path": destination.path, "overwrite": String(overwrite)])
         let link = try JSONDecoder().decode(Link.self, from: data)
         guard let url = URL(string: link.href), url.scheme == "https" else { throw LoaderError.message("Не удалось получить ссылку для загрузки.") }
         var r = URLRequest(url: url); r.httpMethod = "PUT"; r.timeoutInterval = 3600

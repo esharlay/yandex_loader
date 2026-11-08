@@ -58,6 +58,7 @@ with open(sys.argv[2], 'wb') as f: plistlib.dump(info, f)
 PY
 if [ -f "$PROJECT_DIR/Resources/AppIcon.icns" ]; then cp "$PROJECT_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/"; fi
 cp "$PROJECT_DIR/ThirdParty/Sparkle-LICENSE" "$APP/Contents/Resources/"
+cp "$PROJECT_DIR/ThirdParty/WebP-LICENSE" "$PROJECT_DIR/ThirdParty/WebP-PATENTS" "$APP/Contents/Resources/"
 codesign --force --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 OUTPUT_APP="$OUTPUT_DIR/Yandex Loader.app"

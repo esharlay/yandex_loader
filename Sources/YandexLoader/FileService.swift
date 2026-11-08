@@ -30,6 +30,41 @@ class FileService {
         if source.isDisk { try await disk.copy(source, to: target, move: true) }
         else { try FileManager.default.moveItem(atPath: source.path, toPath: target.path) }
     }
+    func writeSnapshot(_ data: Data, to target: Location, overwrite: Bool = false) async throws {
+        try Task.checkCancellation()
+        if target.isDisk {
+            if overwrite, let existing = try await disk.metadata(target), existing.isDirectory {
+                throw LoaderError.message("«\(target.name)» — папка. Сохраните снимок под другим именем.")
+            }
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("YandexLoaderSnapshot-" + UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let temporary = directory.appendingPathComponent(target.name)
+            try data.write(to: temporary, options: .atomic)
+            try Task.checkCancellation()
+            try await disk.upload(temporary, to: target, overwrite: overwrite)
+        } else {
+            let task = Task.detached(priority: .userInitiated) {
+                let fm = FileManager.default
+                let destination = URL(fileURLWithPath: target.path)
+                if (try? fm.attributesOfItem(atPath: target.path)[.type]) as? FileAttributeType == .typeDirectory {
+                    throw LoaderError.message("«\(target.name)» — папка. Сохраните снимок под другим именем.")
+                }
+                let temporary = destination.deletingLastPathComponent().appendingPathComponent(".yandexloader-snapshot-" + UUID().uuidString)
+                defer { try? fm.removeItem(at: temporary) }
+                try Task.checkCancellation()
+                try data.write(to: temporary, options: .atomic)
+                try Task.checkCancellation()
+                if overwrite && (try? fm.attributesOfItem(atPath: target.path)) != nil {
+                    _ = try fm.replaceItemAt(destination, withItemAt: temporary)
+                } else {
+                    // moveItem refuses a concurrently created destination instead of overwriting it.
+                    try fm.moveItem(at: temporary, to: destination)
+                }
+            }
+            try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
+        }
+    }
     func copyFile(_ entry: FileEntry, to target: Location, progress: ByteProgress? = nil) async throws {
         try Task.checkCancellation()
         if entry.location.isDisk {

@@ -16,7 +16,7 @@ import Quartz
     let transferStatus = TransferStatusControl()
     let transferQueue = TransferQueue()
     lazy var transferWindow = TransferWindowController(queue: transferQueue)
-    lazy var updates = UpdateController(isBusy: { [weak self] in self?.transfer != nil })
+    lazy var updates = UpdateController(isBusy: { [weak self] in self?.transfer != nil || self?.preview?.isSavingSnapshot == true })
     var accountInfo: DiskInfo?
     var buffer: [FileEntry] = []
     var bufferMove = false
@@ -37,6 +37,13 @@ import Quartz
         NSApp.appearance = NSAppearance(named: .aqua)
         makeMenus(); makeWindow()
         preview = PreviewController(files: files); auth = AuthController(owner: self)
+        preview.onSnapshotSaved = { [weak self] location in
+            guard let self else { return }
+            for pane in [left, right] where pane.location == location.parent { pane.reload() }
+            brief("Сохранён снимок: " + location.name)
+        }
+        preview.onSnapshotError = { [weak self] in self?.showError($0) }
+        preview.onSnapshotActivityChange = { [weak self] in self?.updates.installationGate.resumeIfIdle() }
         for pane in [left, right] {
             pane.onActivate = { [weak self] p in self?.activate(p) }
             pane.onChange = { [weak self] in self?.updateState() }
@@ -70,6 +77,11 @@ import Quartz
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if preview?.isSavingSnapshot == true {
+            let alert = NSAlert(); alert.messageText = "Снимок ещё сохраняется"; alert.informativeText = "Дождаться сохранения изображения перед выходом?"; alert.addButton(withTitle: "Продолжить сохранение"); alert.addButton(withTitle: "Завершить")
+            if alert.runModal() != .alertSecondButtonReturn { return .terminateCancel }
+            preview.cancelSnapshot()
+        }
         guard transfer != nil else { return .terminateNow }
         let alert = NSAlert(); alert.messageText = "Передача ещё идёт"; alert.informativeText = "Завершить приложение и отменить передачу? Исходные файлы незавершённых элементов сохранятся."; alert.addButton(withTitle: "Продолжить передачу"); alert.addButton(withTitle: "Завершить")
         if alert.runModal() == .alertSecondButtonReturn { transfer?.cancel(); return .terminateNow }; return .terminateCancel

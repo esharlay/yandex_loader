@@ -20,6 +20,14 @@ final class ModelWindow: NSWindow {
     var sceneView: SCNView?
     var currentURL: URL?
     var loadTask: Task<Void, Never>?
+    private var displayedFile: FileEntry?
+    private var modelDetails = ""
+    private var snapshotButton: NSButton?
+    private var snapshotTask: Task<Void, Never>?
+    var isSavingSnapshot: Bool { snapshotTask != nil }
+    var onSnapshotSaved: ((Location) -> Void)?
+    var onSnapshotError: ((Error) -> Void)?
+    var onSnapshotActivityChange: (() -> Void)?
     var keyMonitor: Any?
     var header = label("", size: 14, bold: true)
     var footer = label("", size: 12, color: .secondaryLabelColor)
@@ -53,6 +61,7 @@ final class ModelWindow: NSWindow {
     }
     func showCurrent(activate: Bool = true, debounce: Bool = false) {
         loadTask?.cancel(); guard let file = selection.current else { return }
+        displayedFile = nil; updateSnapshotButton()
         if ModelLoader.extensions.contains(file.ext) { if QLPreviewPanel.sharedPreviewPanelExists() { QLPreviewPanel.shared()?.orderOut(nil) }; ensureWindow(); present(window, activate: activate); header.stringValue = file.name; footer.stringValue = "Загружаем модель…"; sceneView?.scene = nil }
         else { window?.orderOut(nil) }
         loadTask = Task { @MainActor in
@@ -74,8 +83,14 @@ final class ModelWindow: NSWindow {
         let previous = ActionButton("", image: "chevron.left") { [weak self] in self?.step(-1) }
         let next = ActionButton("", image: "chevron.right") { [weak self] in self?.step(1) }
         let reset = ActionButton("Сбросить вид", image: "arrow.counterclockwise") { [weak self] in self?.showCurrent() }
+        let snapshot = ActionButton("Снимок", image: "camera") { [weak self] in self?.takeSnapshot() }
+        snapshot.toolTip = "Сохранить текущий ракурс в WebP рядом с моделью"
+        snapshot.setAccessibilityLabel("Сохранить снимок модели")
+        snapshot.isEnabled = false; snapshotButton = snapshot
         let spacer = NSView(); spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let top = NSStackView(views: [previous, next, header, spacer, reset]); top.spacing = 12; top.edgeInsets = NSEdgeInsets(top: 10, left: 14, bottom: 10, right: 14)
+        header.lineBreakMode = .byTruncatingMiddle
+        header.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let top = NSStackView(views: [previous, next, header, spacer, snapshot, reset]); top.spacing = 12; top.edgeInsets = NSEdgeInsets(top: 10, left: 14, bottom: 10, right: 14)
         let view = SCNView(); view.allowsCameraControl = true; view.autoenablesDefaultLighting = false; view.antialiasingMode = .multisampling4X; view.backgroundColor = NSColor(white: 0.13, alpha: 1); sceneView = view
         footer.maximumNumberOfLines = 3; footer.lineBreakMode = .byWordWrapping
         let hint = label("Мышь — вращение · Колесо — масштаб · ↑ ↓ — файлы · Пробел — закрыть", size: 11, color: .secondaryLabelColor)
@@ -101,8 +116,65 @@ final class ModelWindow: NSWindow {
         sceneView?.defaultCameraController.target = SCNVector3Zero
         sceneView?.defaultCameraController.interactionMode = .orbitTurntable
         let triangles = ModelLoader.triangleCount(model)
-        footer.stringValue = "\(triangles.formatted()) треугольников · Габариты: \(String(format: "%.3g × %.3g × %.3g", dimensions.x, dimensions.y, dimensions.z)) (единицы файла)"
+        modelDetails = "\(triangles.formatted()) треугольников · Габариты: \(String(format: "%.3g × %.3g × %.3g", dimensions.x, dimensions.y, dimensions.z)) (единицы файла)"
+        footer.stringValue = modelDetails
         header.stringValue = file.name + (queue.count > 1 ? "   \(index+1)/\(queue.count)" : "")
+        displayedFile = file; updateSnapshotButton()
+    }
+    private func updateSnapshotButton() {
+        snapshotButton?.isEnabled = displayedFile != nil && sceneView?.scene != nil && !isSavingSnapshot
+    }
+    func cancelSnapshot() { snapshotTask?.cancel() }
+    func takeSnapshot() {
+        guard !isSavingSnapshot, let file = displayedFile, let view = sceneView, view.scene != nil else { return }
+        // Capture before any await: changing selection while saving cannot mix a model's image and name.
+        guard let image = view.snapshot().cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            footer.stringValue = "Не удалось получить снимок модели."; return
+        }
+        footer.stringValue = "Сохраняем снимок…"
+        snapshotTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { snapshotTask = nil; updateSnapshotButton(); onSnapshotActivityChange?() }
+            do {
+                var target = ModelSnapshot.destination(for: file)
+                var overwrite = false
+                if try await files.exists(target) {
+                    let response = await snapshotConflict(target)
+                    try Task.checkCancellation()
+                    switch response {
+                    case .alertFirstButtonReturn: overwrite = true
+                    case .alertSecondButtonReturn: target = try await ModelSnapshot.availableCopy(of: target, files: files)
+                    default:
+                        if displayedFile?.location == file.location { footer.stringValue = modelDetails }
+                        return
+                    }
+                }
+                let encoding = Task.detached(priority: .userInitiated) { try ModelSnapshot.encode(image) }
+                let data = try await encoding.value
+                try Task.checkCancellation()
+                try await files.writeSnapshot(data, to: target, overwrite: overwrite)
+                if displayedFile?.location == file.location { footer.stringValue = "Сохранён снимок: \(target.name)" }
+                onSnapshotSaved?(target)
+            } catch is CancellationError {
+                if displayedFile?.location == file.location { footer.stringValue = modelDetails }
+            } catch {
+                if displayedFile?.location == file.location { footer.stringValue = "Снимок не сохранён: " + errorText(error) }
+                onSnapshotError?(error)
+            }
+        }
+        updateSnapshotButton(); onSnapshotActivityChange?()
+    }
+    private func snapshotConflict(_ target: Location) async -> NSApplication.ModalResponse {
+        guard let window else { return .cancel }
+        return await withCheckedContinuation { continuation in
+            let alert = NSAlert()
+            alert.messageText = "«\(target.name)» уже существует"
+            alert.informativeText = "Заменить изображение в папке \(target.parent.name)?"
+            alert.addButton(withTitle: "Заменить")
+            alert.addButton(withTitle: "Сохранить копию")
+            alert.addButton(withTitle: "Отмена")
+            alert.beginSheetModal(for: window) { continuation.resume(returning: $0) }
+        }
     }
     func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { currentURL == nil ? 0 : 1 }
     func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! { currentURL as NSURL? }

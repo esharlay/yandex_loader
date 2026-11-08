@@ -8,7 +8,10 @@ swift build --package-path "$PROJECT_DIR" --disable-sandbox --cache-path "$BUILD
 SPARKLE_FRAMEWORKS=("$BUILD_DIR"/artifacts/**/macos-*/Sparkle.framework(N/))
 if (( ${#SPARKLE_FRAMEWORKS} != 1 )); then echo "Sparkle.framework не найден" >&2; exit 1; fi
 SPARKLE_PARENT="${SPARKLE_FRAMEWORKS[1]:h}"
+WEBP_BUILD="$BUILD_DIR/arm64-apple-macosx/release/libwebp.build"
+WEBP_OBJECTS=("$WEBP_BUILD"/**/*.o(N.))
+if (( ${#WEBP_OBJECTS} == 0 )); then echo "Кодировщик WebP не собран" >&2; exit 1; fi
 SOURCES=("$PROJECT_DIR"/Sources/YandexLoader/*.swift)
 SOURCES=("${(@)SOURCES:#*/main.swift}")
-swiftc -parse-as-library -swift-version 5 -target arm64-apple-macosx14.0 -module-cache-path "$BUILD_DIR/clang-cache" -F "$SPARKLE_PARENT" -framework Sparkle -Xlinker -rpath -Xlinker "$SPARKLE_PARENT" "${SOURCES[@]}" "$PROJECT_DIR/Checks/LoaderChecks.swift" -o "$BUILD_DIR/LoaderChecks"
+swiftc -parse-as-library -swift-version 5 -target arm64-apple-macosx14.0 -module-cache-path "$BUILD_DIR/clang-cache" -I "$WEBP_BUILD" -F "$SPARKLE_PARENT" -framework Sparkle -Xlinker -rpath -Xlinker "$SPARKLE_PARENT" "${SOURCES[@]}" "$PROJECT_DIR/Checks/LoaderChecks.swift" "${WEBP_OBJECTS[@]}" -o "$BUILD_DIR/LoaderChecks"
 "$BUILD_DIR/LoaderChecks"
