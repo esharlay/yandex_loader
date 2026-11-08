@@ -1,6 +1,22 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
---><rss version="2.0"><channel><title>Yandex Loader</title><link>https://github.com/esharlay/yandex_loader</link><description>Обновления Yandex Loader</description></channel></rss><!-- sparkle-signatures:
-edSignature: x3ezyL21TMnANsO6xrQyFqg2cKyoK0Vja+yxhWxVFUbmSUgJj8hqAil5HBxpFViAMeIlgQUf/k/Oa1fHMhdHDQ==
-length: 478
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Yandex Loader</title>
+    <link>https://github.com/esharlay/yandex_loader</link>
+    <description>Обновления Yandex Loader для macOS</description>
+    <language>ru</language>
+    <item>
+      <title>Yandex Loader 1.4.0</title>
+      <pubDate>Sun, 08 Nov 2026 13:31:52 +0000</pubDate>
+      <sparkle:version>6</sparkle:version>
+      <sparkle:shortVersionString>1.4.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description>&lt;p&gt;Автоматическая проверка обновлений через GitHub и команда «Проверить обновления…» в меню приложения.&lt;/p&gt;&lt;p&gt;Подлинность архива и ленты обновлений проверяется подписью Ed25519. Установка обновления ждёт завершения передачи файлов.&lt;/p&gt;&lt;p&gt;Сохранены окно передач с прогрессом каждого файла и отдельной отменой, контрастное освещение моделей и переключение превью стрелками.&lt;/p&gt;</description>
+      <enclosure url="https://github.com/esharlay/yandex_loader/releases/download/v1.4.0/Yandex-Loader-1.4.0.zip" length="1573726" type="application/octet-stream" sparkle:edSignature="P8/3LHXDr0QkpG3xTban3JmJMOvB+TKZGomF03m7x/cmmSVB1L4DO0plVvSxhqQbiuUs9xgyNjrc8S6Qx8EBBg=="></enclosure>
+    </item>
+  </channel>
+</rss><!-- sparkle-signatures:
+edSignature: deyPGHu9QMWYM1bJlH5XHewn2xnghrssjvKGZZnFWDcnZ8bFclBvC956C5X3njjOTpHmHFhqvGhskuTcQ+e3Cg==
+length: 1943
 -->
